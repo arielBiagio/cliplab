@@ -28,6 +28,9 @@ EditorWorkspace
   ├─ VideoPlayer (se vuelve a montar por cada archivo seleccionado)
   │    ├─ VideoDropZone → eventos de arrastre y validación del archivo
   │    ├─ useVideoPlayer → HTMLVideoElement y estado de reproducción
+  │    ├─ useVideoRenderer → canvas, fotogramas y recuperación del preview
+  │    │    └─ videoRenderer + shaders → texturas y cálculos de color en WebGL2
+  │    ├─ ComparisonOverlay → geometría y control del separador antes/después
   │    ├─ useKeyboardShortcuts → comandos de reproducción y acciones del historial
   │    ├─ PlaybackControls
   │    └─ Timeline
@@ -56,15 +59,36 @@ los mismos datos. Añadirlo ahora escondería parte del flujo sin resolver un
 problema actual. Una biblioteca externa de estado también añadiría conceptos sin
 un beneficio equivalente para este tamaño de aplicación.
 
+## Comparación como estado de vista
+
+`VideoPlayer` mantiene `ComparisonView`: activación y porcentaje del separador.
+Estos datos se envían al renderer aparte de `Adjustments`. No se guardan en el
+historial ni en localStorage; se reinician al abrir otro video. Mover el separador
+redibuja el fotograma actual, incluso con la reproducción pausada.
+
+El fragment shader usa una sola textura: a la izquierda del límite devuelve el
+color original y a la derecha ejecuta el procesamiento de edición. Ambas mitades
+comparten el mismo fotograma y no necesitan sincronizar dos elementos de video.
+
+`ComparisonOverlay` observa el tamaño disponible y las dimensiones del video para
+alinear su control con la imagen ajustada mediante `contain`. Las bandas negras
+quedan fuera de esa geometría. El control `range` conserva el acceso por teclado;
+los eventos de puntero cubren mouse y tacto y Escape restaura el valor anterior a
+un arrastre. La geometría tiene pruebas propias para fuentes horizontales y verticales.
+
+Si se pierde WebGL, el separador se oculta y el botón se deshabilita con un aviso.
+Al recuperarlo vuelve la misma vista, con la posición del separador conservada.
+
 ## Edición e historial por gestos
 
-`Adjustments` contiene cinco valores enteros: brillo, contraste y saturación entre
-0 y 200 %, tono (`hue`) entre −180° y 180°, y sepia entre 0 y 100 %. Los primeros
-tres tienen un valor neutro de 100; los dos últimos, de cero. El **reducer** es una
+`Adjustments` contiene diez valores: brillo, contraste y saturación entre
+0 y 200 %, tono (`hue`) entre −180° y 180°, sepia entre 0 y 100 %, exposición
+entre −2 y +2 EV con pasos de 0,1, sombras, altas luces, temperatura y tinte entre −100 y +100. Los
+primeros tres tienen un valor neutro de 100; los otros siete, de cero. El **reducer** es una
 función que recibe el estado actual y una acción, y devuelve el siguiente estado.
 Normaliza cada valor con sus propios límites y usa su valor neutro si no es finito.
 
-`buildFilter` aplica siempre el mismo orden: brillo, contraste, saturación, sepia
+El shader y `buildFilter` aplican el mismo orden: brillo, contraste, saturación, sepia
 y rotación de tono. El orden afecta el resultado: por ejemplo, cambiar el tono
 también desplaza los colores que generó sepia. `AdjustmentSlider` recibe límites
 y unidad para calcular su escala y progreso; no interpreta qué efecto representa.
@@ -72,9 +96,28 @@ El preset Sepia conserva sus valores de brillo, contraste y saturación y añade
 un 75 % de sepia real. Los demás parten de `DEFAULT_ADJUSTMENTS`, de modo que al
 aplicarlos también se restablecen los parámetros nuevos.
 
-El historial almacena los cinco valores y `equalAdjustments` compara todos ellos.
+El preview usa WebGL2; `buildFilter` conserva la representación CSS para las
+miniaturas de presets y como alternativa cuando la GPU o los callbacks de
+fotogramas no están disponibles. El video sigue controlando audio y tiempo.
+El canvas muestra el resultado visual, sin aplicar filtros CSS por segunda vez.
+La implementación y sus límites se explican en [el recorrido de WebGL](webgl-preview.md).
+
+El historial almacena los diez valores y `equalAdjustments` compara todos ellos.
 Así, modificar solo el tono o sepia cuenta como edición y cambia la etiqueta del
-preset cuando corresponde. Reset restaura los cinco valores en una sola operación.
+preset cuando corresponde. Reset restaura los diez valores en una sola operación.
+
+Exposición, temperatura y tinte se aplican primero, en RGB lineal. El helper
+`colorGradingGains` calcula las ganancias de los tres canales y el renderer las
+envía al shader mediante un uniform. Después se calculan máscaras suaves de luminosidad para sombras y altas luces.
+Estas ajustan la luz lineal de sus zonas antes de volver a sRGB y aplicar los cinco
+efectos anteriores. Los presets existentes dejan los cinco parámetros de grading en cero para conservar su apariencia.
+
+El reproductor comunica al área de trabajo si el preview gráfico está preparado;
+solo cambia esa señal al cambiar el modo de renderizado o la disponibilidad del
+video. Los avances del tiempo siguen quedando dentro del reproductor. En modo CSS,
+los cinco controles de grading se deshabilitan y el aviso informa de que se omiten
+temporalmente. Sus valores permanecen en el historial y vuelven a aplicarse al
+recuperarse WebGL. Los cinco efectos anteriores siguen disponibles en ese modo.
 
 Los presets son combinaciones inmutables de esos mismos valores. `findPreset`
 deduce su etiqueta a partir de los ajustes actuales. No almacenamos por separado
@@ -213,7 +256,7 @@ todo el contenido que cargue un usuario ni todas las tecnologías de asistencia.
 ## Decisiones de alcance
 
 - Solo persisten los atajos; recargar inicia una sesión vacía.
-- Los filtros CSS modifican la presentación, no el archivo de origen.
+- WebGL2 y los filtros CSS modifican la presentación, no el archivo de origen.
 - Una extensión o un tipo MIME válido no garantizan la compatibilidad del códec.
 - `timeupdate` es suficiente para mostrar progreso básico; el MVP no requiere
   navegación precisa por fotogramas.

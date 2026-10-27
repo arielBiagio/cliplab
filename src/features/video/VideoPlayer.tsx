@@ -1,7 +1,9 @@
-import type { RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 import { Icon } from '../../shared/Icon';
 import { buildFilter } from '../editing/filters';
 import type { Adjustments } from '../editing/types';
+import { useVideoRenderer } from '../rendering/useVideoRenderer';
+import { DEFAULT_COMPARISON } from '../rendering/comparison';
 import { useKeyboardShortcuts } from '../shortcuts/useKeyboardShortcuts';
 import type { ShortcutPreferences } from '../shortcuts/types';
 import { Timeline } from '../timeline/Timeline';
@@ -9,12 +11,14 @@ import { PlaybackControls } from './PlaybackControls';
 import { VideoLoader } from './VideoLoader';
 import { VideoDropZone } from './VideoDropZone';
 import { useVideoPlayer } from './useVideoPlayer';
+import { ComparisonOverlay } from './ComparisonOverlay';
 
 interface Props {
   file: File | null;
   adjustments: Adjustments;
   onLoad: (file: File) => void;
   onReady: (ready: boolean) => void;
+  onGraphicsReady: (ready: boolean) => void;
   preferences: ShortcutPreferences;
   shortcutsOpen: boolean;
   scopeRef: RefObject<HTMLElement | null>;
@@ -29,6 +33,7 @@ export function VideoPlayer({
   adjustments,
   onLoad,
   onReady,
+  onGraphicsReady,
   preferences,
   shortcutsOpen,
   scopeRef,
@@ -37,6 +42,7 @@ export function VideoPlayer({
   onUndo,
   onRedo,
 }: Props) {
+  const [comparison, setComparison] = useState({ ...DEFAULT_COMPARISON });
   const {
     videoRef,
     state,
@@ -49,7 +55,17 @@ export function VideoPlayer({
     startScrub,
     endScrub,
   } = useVideoPlayer(file, onReady);
+  const {
+    canvasRef,
+    mode: rendererMode,
+    warning: rendererWarning,
+  } = useVideoRenderer(videoRef, adjustments, !!file, comparison);
   const ready = state.status === 'ready';
+  const comparisonAvailable = ready && rendererMode === 'webgl2';
+  const comparing = comparisonAvailable && comparison.enabled;
+  useEffect(() => {
+    onGraphicsReady(ready && rendererMode === 'webgl2');
+  }, [ready, rendererMode, onGraphicsReady]);
   useKeyboardShortcuts({
     scopeRef,
     preferences,
@@ -74,19 +90,58 @@ export function VideoPlayer({
               {file?.name ?? 'A blank canvas, for now'}
             </span>
           </div>
-          <span className="preview-mode">
-            FIT <span>↗</span>
-          </span>
+          <button
+            type="button"
+            className="comparison-toggle"
+            aria-label="Compare before and after"
+            aria-pressed={comparison.enabled}
+            title={
+              comparisonAvailable
+                ? 'Compare original and edited'
+                : 'Comparison requires the graphics preview'
+            }
+            disabled={!comparisonAvailable}
+            onClick={() =>
+              setComparison((previous) => ({ ...previous, enabled: !previous.enabled }))
+            }
+          >
+            <Icon name="compare" width="16" height="16" />
+            <span>Compare</span>
+          </button>
         </div>
         <VideoDropZone hasVideo={!!file} loading={state.status === 'loading'} onLoad={onLoad}>
           <video
             ref={videoRef}
-            className={ready ? 'video-visible' : ''}
-            style={{ filter: buildFilter(adjustments) }}
+            className={ready && rendererMode !== 'webgl2' ? 'video-visible' : ''}
+            style={{ filter: rendererMode === 'webgl2' ? 'none' : buildFilter(adjustments) }}
             playsInline
             preload="metadata"
             aria-label="Video preview"
+            aria-hidden={rendererMode === 'webgl2'}
           />
+          <canvas
+            ref={canvasRef}
+            className={`video-canvas ${ready && rendererMode === 'webgl2' ? 'preview-visible' : ''}`}
+            data-renderer={rendererMode}
+            role="img"
+            aria-label={
+              comparing
+                ? 'Video preview: original on the left, edited on the right'
+                : 'Video preview'
+            }
+            aria-hidden={!ready || rendererMode !== 'webgl2'}
+          />
+          {comparing && (
+            <ComparisonOverlay
+              videoRef={videoRef}
+              split={comparison.split}
+              onChange={(split) =>
+                setComparison((previous) =>
+                  previous.split === split ? previous : { ...previous, split },
+                )
+              }
+            />
+          )}
           {!file && (
             <div className="empty-state">
               <div className="empty-visual" aria-hidden="true">
@@ -134,12 +189,19 @@ export function VideoPlayer({
               <VideoLoader onLoad={onLoad} hasVideo inputLabel="Choose replacement video" />
             </div>
           )}
-          {ready && (
+          {ready && !comparing && (
             <div className="video-overlay-label" aria-hidden="true">
               <span className="status-dot" /> PREVIEW ONLY
             </div>
           )}
         </VideoDropZone>
+        {ready && rendererWarning && (
+          <p className="rendering-warning" role="status">
+            {rendererWarning} Exposure, shadows, highlights, temperature and tint are temporarily
+            bypassed.
+            {comparison.enabled && ' Before/after comparison is temporarily unavailable.'}
+          </p>
+        )}
         {ready && state.error && (
           <p className="playback-error" role="alert">
             {state.error}

@@ -4,6 +4,11 @@ export interface Adjustments {
   saturation: number;
   hue: number;
   sepia: number;
+  exposure: number;
+  temperature: number;
+  tint: number;
+  shadows: number;
+  highlights: number;
 }
 
 export type AdjustmentKey = keyof Adjustments;

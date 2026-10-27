@@ -85,10 +85,8 @@ test('edits hue and sepia with limits, presets, reset and complete undo / redo',
   await page.getByRole('button', { name: 'Sepia', exact: true }).click();
   await expect(hue).toHaveValue('0');
   await expect(sepia).toHaveValue('75');
-  await expect(page.locator('video')).toHaveCSS(
-    'filter',
-    'brightness(1.05) contrast(0.95) saturate(0.6) sepia(0.75) hue-rotate(0deg)',
-  );
+  await expect(page.locator('canvas.video-canvas')).toHaveAttribute('data-renderer', 'webgl2');
+  await expect(page.locator('video')).toHaveCSS('filter', 'none');
   await sepia.focus();
   await sepia.press('End');
   await sepia.press('ArrowRight');

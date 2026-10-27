@@ -7,7 +7,11 @@ interface Props {
   value: number;
   min?: number;
   max?: number;
-  unit?: '%' | '°';
+  unit?: '%' | '°' | 'EV' | '';
+  step?: number;
+  description?: string;
+  minLabel?: string;
+  maxLabel?: string;
   disabled: boolean;
   onPreview: (value: number) => void;
   onCommit: () => void;
@@ -21,6 +25,10 @@ export function AdjustmentSlider({
   min = 0,
   max = 200,
   unit = '%',
+  step = 1,
+  description,
+  minLabel,
+  maxLabel,
   disabled,
   onPreview,
   onCommit,
@@ -34,7 +42,7 @@ export function AdjustmentSlider({
           {name}
         </label>
         <output htmlFor={`adjust-${name}`}>
-          {value}
+          {step < 1 ? value.toFixed(1) : value}
           <span>{unit}</span>
         </output>
       </div>
@@ -43,11 +51,12 @@ export function AdjustmentSlider({
         type="range"
         min={min}
         max={max}
-        step="1"
+        step={step}
         value={value}
         disabled={disabled}
         style={{ '--range-progress': `${((value - min) / (max - min)) * 100}%` } as CSSProperties}
-        aria-valuetext={`${value} ${unit === '°' ? 'degrees' : 'percent'}`}
+        aria-valuetext={`${value}${unit === 'EV' ? ' exposure stops' : unit === '°' ? ' degrees' : unit === '%' ? ' percent' : ''}`}
+        aria-describedby={description ? `description-${name}` : undefined}
         onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
         onChange={(event) => onPreview(Number(event.target.value))}
         onPointerUp={onCommit}
@@ -76,10 +85,15 @@ export function AdjustmentSlider({
         }}
       />
       <div className="range-scale" aria-hidden="true">
-        <span>{min}</span>
+        <span>{minLabel ?? min}</span>
         <span>{(min + max) / 2}</span>
-        <span>{max}</span>
+        <span>{maxLabel ?? max}</span>
       </div>
+      {description && (
+        <span id={`description-${name}`} className="visually-hidden">
+          {description}
+        </span>
+      )}
     </div>
   );
 }

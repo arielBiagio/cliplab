@@ -41,8 +41,29 @@ por su cuenta.
 
 **Concepto:** un **control controlado** muestra un valor que proviene del estado
 de React y solicita actualizarlo cuando el usuario interactúa. Una función pura
-convierte los cinco valores de ajuste en una cadena de filtros CSS. La etiqueta del
+convierte los cinco efectos originales en una cadena de filtros CSS, que también
+sirve de referencia para el shader. Exposición, temperatura y tinte utilizan
+ganancias por canal en RGB lineal antes de esos efectos. La etiqueta del
 preset se deduce de esos números en lugar de guardarse por separado.
+
+**Exposición, temperatura y tinte:** Exposure mide pasos de luz (EV) de −2 a +2,
+con incrementos de 0,1. Temperature mueve el equilibrio entre frío y cálido; Tint,
+entre verde y magenta. Ambos usan escalas relativas de −100 a +100. Los tres parten
+de cero y necesitan el preview WebGL; si la GPU se pierde, se omiten temporalmente
+con un aviso y sus valores se recuperan al restaurarla. Puedes leer el recorrido
+de sus cálculos en [la guía de WebGL](webgl-preview.md).
+
+**Sombras y altas luces:** Shadows actúa principalmente sobre lo oscuro y
+Highlights sobre lo claro. Los dos van de −100 a +100 y parten de cero. Una
+**máscara** es un peso entre cero y uno que indica cuánto debe influir un ajuste
+en cada píxel. Aquí ese peso cambia suavemente según su luminosidad; así evitamos
+una frontera brusca. El cálculo vive en `shaders.ts` y sus números viajan mediante
+uniforms desde `videoRenderer.ts`. También necesitan WebGL.
+
+Para observarlo, pausa un fotograma con partes claras y oscuras y mueve un control
+por vez. Usa Compare y Undo para distinguir el efecto de cambiar el estado de vista.
+En DevTools puedes seguir el valor desde `Adjustments` hasta `uniform1f`, sin tener
+que entender todas las fórmulas del shader a la vez.
 
 **Tono y sepia:** Hue usa `hue-rotate()` para desplazar los colores por el círculo
 cromático. Cero grados conserva el tono; los extremos −180° y 180° representan la
@@ -60,8 +81,10 @@ a la izquierda. Los valores nuevos forman parte del mismo historial de edición.
 [EffectsPanel.tsx](../src/features/editing/EffectsPanel.tsx).
 
 **Comprueba:** aplica Cinematic. Brightness, Contrast y Saturation deben mostrar
-105, 115 y 85, respectivamente. Mueve un control deslizante e inspecciona el estilo
-`filter` del video en Elements. Prueba ambos límites, aplica Black & White y pulsa
+105, 115 y 85, respectivamente. Mueve un control deslizante e inspecciona el canvas en Elements:
+`data-renderer="webgl2"` confirma el preview gráfico. En ese modo el video fuente
+tiene `filter: none`; los cinco filtros CSS solo se aplican al video en la vista
+estándar de respaldo. Prueba ambos límites, aplica Black & White y pulsa
 Reset. Todos los controles y la etiqueta del estilo actual deben coincidir.
 
 **Investiga:** coloca un breakpoint en `buildFilter` y compara sus argumentos con
@@ -100,6 +123,12 @@ borrador que vuelve a los valores iniciales no añade una entrada al confirmarse
 Puedes partir de las pruebas de cancelación y de cambios sin efecto.
 
 ## 4. Línea de tiempo y exploración por arrastre
+
+La vista **Compare** muestra original y edición en el mismo fotograma. Su
+separador se puede arrastrar o mover con las flechas; Home muestra toda la edición
+y End todo el original. Moverlo no crea pasos de Undo: es estado de vista y los
+ajustes de edición siguen siendo los mismos. La guía de WebGL explica cómo ambas
+mitades se obtienen de una sola textura.
 
 **Concepto:** la línea de tiempo representa la posición del video y envía órdenes
 para cambiarla. Esta exploración se suele llamar **scrubbing**. El reproductor

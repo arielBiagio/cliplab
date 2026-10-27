@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const port = Number(process.env.CLIPLAB_E2E_PORT ?? 4276);
+const baseURL = `http://127.0.0.1:${port}`;
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -7,7 +10,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://127.0.0.1:4276',
+    baseURL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
@@ -16,8 +19,8 @@ export default defineConfig({
     { name: 'mobile', use: { ...devices['Pixel 7'], viewport: { width: 360, height: 800 } } },
   ],
   webServer: {
-    command: 'npm run preview -- --port 4276 --strictPort',
-    url: 'http://127.0.0.1:4276',
+    command: `npm run preview -- --port ${port} --strictPort`,
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
   },
 });

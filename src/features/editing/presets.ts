@@ -6,6 +6,11 @@ export const DEFAULT_ADJUSTMENTS: Readonly<Adjustments> = {
   saturation: 100,
   hue: 0,
   sepia: 0,
+  exposure: 0,
+  temperature: 0,
+  tint: 0,
+  shadows: 0,
+  highlights: 0,
 };
 
 export const PRESETS: readonly Preset[] = [
@@ -53,7 +58,12 @@ export function equalAdjustments(a: Readonly<Adjustments>, b: Readonly<Adjustmen
     a.contrast === b.contrast &&
     a.saturation === b.saturation &&
     a.hue === b.hue &&
-    a.sepia === b.sepia
+    a.sepia === b.sepia &&
+    a.exposure === b.exposure &&
+    a.temperature === b.temperature &&
+    a.tint === b.tint &&
+    a.shadows === b.shadows &&
+    a.highlights === b.highlights
   );
 }
 

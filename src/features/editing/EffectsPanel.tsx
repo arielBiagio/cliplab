@@ -9,18 +9,86 @@ import type { Dispatch } from 'react';
 interface Props {
   adjustments: Adjustments;
   disabled: boolean;
+  graphicsReady: boolean;
   dispatch: Dispatch<HistoryAction>;
 }
 
-export function EffectsPanel({ adjustments, disabled, dispatch }: Props) {
+export function EffectsPanel({ adjustments, disabled, graphicsReady, dispatch }: Props) {
   const controls: {
     key: AdjustmentKey;
     name: string;
     icon: IconName;
     min?: number;
     max?: number;
-    unit?: '%' | '°';
+    unit?: '%' | '°' | 'EV' | '';
+    step?: number;
+    description?: string;
+    minLabel?: string;
+    maxLabel?: string;
+    requiresGraphics?: boolean;
   }[] = [
+    {
+      key: 'exposure',
+      name: 'Exposure',
+      icon: 'sun',
+      min: -2,
+      max: 2,
+      step: 0.1,
+      unit: 'EV',
+      requiresGraphics: true,
+      description:
+        'Adjust exposure in stops. Each positive stop doubles linear light. Requires the graphics preview.',
+    },
+    {
+      key: 'shadows',
+      name: 'Shadows',
+      icon: 'contrast',
+      min: -100,
+      max: 100,
+      unit: '',
+      minLabel: 'Darker',
+      maxLabel: 'Lighter',
+      requiresGraphics: true,
+      description: 'Adjust darker areas with a soft luminance mask. Requires the graphics preview.',
+    },
+    {
+      key: 'highlights',
+      name: 'Highlights',
+      icon: 'sun',
+      min: -100,
+      max: 100,
+      unit: '',
+      minLabel: 'Darker',
+      maxLabel: 'Lighter',
+      requiresGraphics: true,
+      description:
+        'Adjust brighter areas with a soft luminance mask. Requires the graphics preview.',
+    },
+    {
+      key: 'temperature',
+      name: 'Temperature',
+      icon: 'sliders',
+      min: -100,
+      max: 100,
+      unit: '',
+      minLabel: 'Cool',
+      maxLabel: 'Warm',
+      requiresGraphics: true,
+      description:
+        'Move between cooler and warmer colors. This is a relative creative adjustment, not a Kelvin measurement. Requires the graphics preview.',
+    },
+    {
+      key: 'tint',
+      name: 'Tint',
+      icon: 'drop',
+      min: -100,
+      max: 100,
+      unit: '',
+      minLabel: 'Green',
+      maxLabel: 'Magenta',
+      requiresGraphics: true,
+      description: 'Move between green and magenta. Requires the graphics preview.',
+    },
     { key: 'brightness', name: 'Brightness', icon: 'sun' },
     { key: 'contrast', name: 'Contrast', icon: 'contrast' },
     { key: 'saturation', name: 'Saturation', icon: 'drop' },
@@ -63,7 +131,11 @@ export function EffectsPanel({ adjustments, disabled, dispatch }: Props) {
               min={control.min}
               max={control.max}
               unit={control.unit}
-              disabled={disabled}
+              step={control.step}
+              description={control.description}
+              minLabel={control.minLabel}
+              maxLabel={control.maxLabel}
+              disabled={disabled || (!!control.requiresGraphics && !graphicsReady)}
               onPreview={(value) =>
                 dispatch({ type: 'preview', adjustments: { ...adjustments, [control.key]: value } })
               }

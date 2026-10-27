@@ -15,6 +15,7 @@ import { Icon } from '../shared/Icon';
 export function EditorWorkspace() {
   const [session, setSession] = useState<{ file: File | null; id: number }>({ file: null, id: 0 });
   const [ready, setReady] = useState(false);
+  const [graphicsReady, setGraphicsReady] = useState(false);
   const [{ preferences, warning }, setPreferences] = useState(readPreferences);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const workspaceRef = useRef<HTMLElement>(null);
@@ -27,6 +28,7 @@ export function EditorWorkspace() {
   const onLoad = useCallback(
     (file: File) => {
       setReady(false);
+      setGraphicsReady(false);
       dispatch({ type: 'clear' });
       setSession((previous) => ({ file, id: previous.id + 1 }));
     },
@@ -103,6 +105,7 @@ export function EditorWorkspace() {
             adjustments={adjustments}
             onLoad={onLoad}
             onReady={onReady}
+            onGraphicsReady={setGraphicsReady}
             preferences={preferences}
             shortcutsOpen={shortcutsOpen}
             scopeRef={workspaceRef}
@@ -111,7 +114,12 @@ export function EditorWorkspace() {
             onUndo={onUndo}
             onRedo={onRedo}
           />
-          <EffectsPanel adjustments={adjustments} disabled={!ready} dispatch={dispatch} />
+          <EffectsPanel
+            adjustments={adjustments}
+            disabled={!ready}
+            graphicsReady={graphicsReady}
+            dispatch={dispatch}
+          />
         </div>
       </main>
 

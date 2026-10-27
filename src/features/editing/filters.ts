@@ -11,6 +11,11 @@ export function normalizeAdjustments(values: Adjustments): Adjustments {
     saturation: clampAdjustment(values.saturation),
     hue: clampAdjustment(values.hue, -180, 180, 0),
     sepia: clampAdjustment(values.sepia, 0, 100, 0),
+    exposure: clampAdjustment(values.exposure * 10, -20, 20, 0) / 10,
+    temperature: clampAdjustment(values.temperature, -100, 100, 0),
+    tint: clampAdjustment(values.tint, -100, 100, 0),
+    shadows: clampAdjustment(values.shadows, -100, 100, 0),
+    highlights: clampAdjustment(values.highlights, -100, 100, 0),
   };
 }
 

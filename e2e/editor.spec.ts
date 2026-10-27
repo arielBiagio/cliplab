@@ -71,10 +71,8 @@ test('synchronizes presets, filters, reset and undo / redo', async ({ page }) =>
   await expect(page.getByLabel('Brightness', { exact: true })).toHaveValue('105');
   await expect(page.getByLabel('Contrast', { exact: true })).toHaveValue('115');
   await expect(page.getByLabel('Saturation', { exact: true })).toHaveValue('85');
-  await expect(page.locator('video')).toHaveCSS(
-    'filter',
-    'brightness(1.05) contrast(1.15) saturate(0.85) sepia(0) hue-rotate(0deg)',
-  );
+  await expect(page.locator('canvas.video-canvas')).toHaveAttribute('data-renderer', 'webgl2');
+  await expect(page.locator('video')).toHaveCSS('filter', 'none');
   await page.getByRole('button', { name: 'Undo adjustment' }).click();
   await expect(page.getByLabel('Brightness', { exact: true })).toHaveValue('100');
   await page.getByRole('button', { name: 'Redo adjustment' }).click();
