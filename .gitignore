@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.netlify/
+.cache/
+playwright-report/
+test-results/
+coverage/
+*.local
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+qa-artifacts/
+debug.log
