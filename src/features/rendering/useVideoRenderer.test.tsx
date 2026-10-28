@@ -2,6 +2,8 @@ import { StrictMode, useRef } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_ADJUSTMENTS } from '../editing/presets';
+import { DEFAULT_LUT_STATE } from '../luts/types';
+import { DEFAULT_COLOR_MIXER, type ColorMixerState } from '../editing/colorMixer';
 import type { Adjustments } from '../editing/types';
 import { createVideoRenderer } from './videoRenderer';
 import { useVideoRenderer } from './useVideoRenderer';
@@ -25,13 +27,22 @@ function Harness({
   adjustments = DEFAULT_ADJUSTMENTS,
   enabled = true,
   comparison = DEFAULT_COMPARISON,
+  colorMixer = DEFAULT_COLOR_MIXER,
 }: {
   adjustments?: Readonly<Adjustments>;
   enabled?: boolean;
   comparison?: Readonly<ComparisonView>;
+  colorMixer?: ColorMixerState;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { canvasRef, mode, warning } = useVideoRenderer(videoRef, adjustments, enabled, comparison);
+  const { canvasRef, mode, warning } = useVideoRenderer(
+    videoRef,
+    adjustments,
+    enabled,
+    comparison,
+    DEFAULT_LUT_STATE,
+    colorMixer,
+  );
   return (
     <>
       <video ref={videoRef} aria-label="Source" />
@@ -94,7 +105,13 @@ describe('video rendering lifecycle', () => {
     await waitFor(() => expect(screen.getByTestId('mode')).toHaveTextContent('webgl2'));
     const adjustments = { ...DEFAULT_ADJUSTMENTS, hue: 45, sepia: 75 };
     rerender(<Harness adjustments={adjustments} />);
-    expect(draw).toHaveBeenLastCalledWith(video, adjustments, DEFAULT_COMPARISON);
+    expect(draw).toHaveBeenLastCalledWith(
+      video,
+      adjustments,
+      DEFAULT_COMPARISON,
+      DEFAULT_LUT_STATE,
+      DEFAULT_COLOR_MIXER,
+    );
     expect(video.paused).toBe(true);
     expect(createVideoRenderer).toHaveBeenCalledOnce();
   });
@@ -122,7 +139,13 @@ describe('video rendering lifecycle', () => {
     rerender(<Harness adjustments={adjustments} />);
     fireEvent(canvas, new Event('webglcontextrestored'));
     expect(createVideoRenderer).toHaveBeenCalledTimes(2);
-    expect(draw).toHaveBeenLastCalledWith(video, adjustments, DEFAULT_COMPARISON);
+    expect(draw).toHaveBeenLastCalledWith(
+      video,
+      adjustments,
+      DEFAULT_COMPARISON,
+      DEFAULT_LUT_STATE,
+      DEFAULT_COLOR_MIXER,
+    );
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
@@ -152,10 +175,49 @@ describe('video rendering lifecycle', () => {
     const video = makeReady();
     const comparison = { enabled: true, split: 30 };
     rerender(<Harness adjustments={adjustments} comparison={comparison} />);
-    expect(draw).toHaveBeenLastCalledWith(video, adjustments, comparison);
+    expect(draw).toHaveBeenLastCalledWith(
+      video,
+      adjustments,
+      comparison,
+      DEFAULT_LUT_STATE,
+      DEFAULT_COLOR_MIXER,
+    );
     expect(createVideoRenderer).toHaveBeenCalledOnce();
     expect(video.paused).toBe(true);
     expect(video.currentTime).toBe(0);
     expect(adjustments).toEqual({ ...DEFAULT_ADJUSTMENTS, exposure: 1, tint: -20 });
+  });
+
+  it('redraws mixer edits while paused and restores the latest mixer after GPU loss', async () => {
+    const { rerender } = render(<Harness />);
+    await waitFor(() => expect(createVideoRenderer).toHaveBeenCalledOnce());
+    const video = makeReady();
+    const canvas = screen.getByLabelText('Output');
+    const colorMixer = {
+      ...DEFAULT_COLOR_MIXER,
+      green: { hue: 20, saturation: -40, luminance: 10 },
+    };
+    rerender(<Harness colorMixer={colorMixer} />);
+    expect(draw).toHaveBeenLastCalledWith(
+      video,
+      DEFAULT_ADJUSTMENTS,
+      DEFAULT_COMPARISON,
+      DEFAULT_LUT_STATE,
+      colorMixer,
+    );
+    expect(createVideoRenderer).toHaveBeenCalledOnce();
+    fireEvent(canvas, new Event('webglcontextlost', { cancelable: true }));
+    const latest = { ...colorMixer, blue: { hue: -10, saturation: 30, luminance: -25 } };
+    rerender(<Harness colorMixer={latest} />);
+    fireEvent(canvas, new Event('webglcontextrestored'));
+    expect(draw).toHaveBeenLastCalledWith(
+      video,
+      DEFAULT_ADJUSTMENTS,
+      DEFAULT_COMPARISON,
+      DEFAULT_LUT_STATE,
+      latest,
+    );
+    expect(createVideoRenderer).toHaveBeenCalledTimes(2);
+    expect(video.paused).toBe(true);
   });
 });

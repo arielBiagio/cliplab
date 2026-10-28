@@ -17,6 +17,8 @@ const paths = {
   sun: 'M12 3v1m0 16v1M3 12h1m16 0h1M5.6 5.6l.7.7m11.4 11.4.7.7M5.6 18.4l.7-.7M17.7 6.3l.7-.7M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
   contrast: 'M12 3a9 9 0 1 0 0 18V3Zm0 0a9 9 0 0 1 0 18',
   compare: 'M3 4h18v16H3V4Zm9 0v16m-6-11 2 3-2 3m12-6-2 3 2 3',
+  fullscreen: 'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5',
+  minimize: 'M3 8h5V3m8 0v5h5M8 21v-5H3m18 0h-5v5',
   drop: 'M12 3S5 11 5 15a7 7 0 0 0 14 0c0-4-7-12-7-12Z',
   sliders: 'M4 7h7m4 0h5M4 17h3m4 0h9M11 4v6M7 14v6',
   film: 'M4 3h16v18H4V3Zm0 5h16M4 16h16M8 3v5m8-5v5M8 16v5m8-5v5',

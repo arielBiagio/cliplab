@@ -1,7 +1,9 @@
-import { useEffect, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Icon } from '../../shared/Icon';
 import { buildFilter } from '../editing/filters';
 import type { Adjustments } from '../editing/types';
+import type { LutState } from '../luts/types';
+import type { ColorMixerState } from '../editing/colorMixer';
 import { useVideoRenderer } from '../rendering/useVideoRenderer';
 import { DEFAULT_COMPARISON } from '../rendering/comparison';
 import { useKeyboardShortcuts } from '../shortcuts/useKeyboardShortcuts';
@@ -16,6 +18,8 @@ import { ComparisonOverlay } from './ComparisonOverlay';
 interface Props {
   file: File | null;
   adjustments: Adjustments;
+  lut: LutState;
+  colorMixer: ColorMixerState;
   onLoad: (file: File) => void;
   onReady: (ready: boolean) => void;
   onGraphicsReady: (ready: boolean) => void;
@@ -26,11 +30,15 @@ interface Props {
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  initialTime?: number;
+  onPositionChange?: (time: number, immediately: boolean) => void;
 }
 
 export function VideoPlayer({
   file,
   adjustments,
+  lut,
+  colorMixer,
   onLoad,
   onReady,
   onGraphicsReady,
@@ -41,8 +49,17 @@ export function VideoPlayer({
   canRedo,
   onUndo,
   onRedo,
+  initialTime,
+  onPositionChange,
 }: Props) {
   const [comparison, setComparison] = useState({ ...DEFAULT_COMPARISON });
+  const playbackRef = useRef<HTMLDivElement>(null);
+  const fullscreenButtonRef = useRef<HTMLButtonElement>(null);
+  const fullscreenPending = useRef(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenError, setFullscreenError] = useState<string | null>(null);
+  const fullscreenAvailable =
+    document.fullscreenEnabled && typeof document.documentElement.requestFullscreen === 'function';
   const {
     videoRef,
     state,
@@ -54,15 +71,49 @@ export function VideoPlayer({
     restart,
     startScrub,
     endScrub,
-  } = useVideoPlayer(file, onReady);
+  } = useVideoPlayer(file, onReady, initialTime, onPositionChange);
   const {
     canvasRef,
     mode: rendererMode,
     warning: rendererWarning,
-  } = useVideoRenderer(videoRef, adjustments, !!file, comparison);
+  } = useVideoRenderer(videoRef, adjustments, !!file, comparison, lut, colorMixer);
   const ready = state.status === 'ready';
   const comparisonAvailable = ready && rendererMode === 'webgl2';
   const comparing = comparisonAvailable && comparison.enabled;
+
+  useEffect(() => {
+    let wasFullscreen = false;
+    function syncFullscreen() {
+      const active = document.fullscreenElement === playbackRef.current;
+      setIsFullscreen(active);
+      setFullscreenError(null);
+      if (active) playbackRef.current?.focus({ preventScroll: true });
+      else if (wasFullscreen) fullscreenButtonRef.current?.focus({ preventScroll: true });
+      wasFullscreen = active;
+    }
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen);
+  }, []);
+
+  async function toggleFullscreen() {
+    const container = playbackRef.current;
+    if (!container || !fullscreenAvailable || fullscreenPending.current) return;
+    const exiting = document.fullscreenElement === container;
+    if (!ready && !exiting) return;
+    fullscreenPending.current = true;
+    setFullscreenError(null);
+    try {
+      if (exiting) await document.exitFullscreen();
+      else await container.requestFullscreen();
+    } catch {
+      if (container.isConnected)
+        setFullscreenError(
+          'Could not change fullscreen mode. Try opening ClipLab in its own browser tab, or press Escape to exit fullscreen.',
+        );
+    } finally {
+      fullscreenPending.current = false;
+    }
+  }
   useEffect(() => {
     onGraphicsReady(ready && rendererMode === 'webgl2');
   }, [ready, rendererMode, onGraphicsReady]);
@@ -80,7 +131,7 @@ export function VideoPlayer({
   });
 
   return (
-    <div className="playback-area">
+    <div className="playback-area" ref={playbackRef} tabIndex={-1}>
       <section className="preview-panel panel" aria-labelledby="preview-heading">
         <div className="panel-heading">
           <div className="heading-with-icon">
@@ -90,24 +141,44 @@ export function VideoPlayer({
               {file?.name ?? 'A blank canvas, for now'}
             </span>
           </div>
-          <button
-            type="button"
-            className="comparison-toggle"
-            aria-label="Compare before and after"
-            aria-pressed={comparison.enabled}
-            title={
-              comparisonAvailable
-                ? 'Compare original and edited'
-                : 'Comparison requires the graphics preview'
-            }
-            disabled={!comparisonAvailable}
-            onClick={() =>
-              setComparison((previous) => ({ ...previous, enabled: !previous.enabled }))
-            }
-          >
-            <Icon name="compare" width="16" height="16" />
-            <span>Compare</span>
-          </button>
+          <div className="preview-actions">
+            <button
+              type="button"
+              className="comparison-toggle"
+              aria-label="Compare before and after"
+              aria-pressed={comparison.enabled}
+              title={
+                comparisonAvailable
+                  ? 'Compare original and edited'
+                  : 'Comparison requires the graphics preview'
+              }
+              disabled={!comparisonAvailable}
+              onClick={() =>
+                setComparison((previous) => ({ ...previous, enabled: !previous.enabled }))
+              }
+            >
+              <Icon name="compare" width="16" height="16" />
+              <span>Compare</span>
+            </button>
+            <button
+              type="button"
+              className="icon-button fullscreen-toggle"
+              ref={fullscreenButtonRef}
+              aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              aria-pressed={isFullscreen}
+              title={
+                !fullscreenAvailable
+                  ? 'Fullscreen is unavailable in this browser'
+                  : isFullscreen
+                    ? 'Exit fullscreen (Esc)'
+                    : 'Enter fullscreen'
+              }
+              disabled={!fullscreenAvailable || (!ready && !isFullscreen)}
+              onClick={() => void toggleFullscreen()}
+            >
+              <Icon name={isFullscreen ? 'minimize' : 'fullscreen'} width="17" height="17" />
+            </button>
+          </div>
         </div>
         <VideoDropZone hasVideo={!!file} loading={state.status === 'loading'} onLoad={onLoad}>
           <video
@@ -199,12 +270,18 @@ export function VideoPlayer({
           <p className="rendering-warning" role="status">
             {rendererWarning} Exposure, shadows, highlights, temperature and tint are temporarily
             bypassed.
+            {lut.source && ' The LUT is temporarily bypassed too.'}
             {comparison.enabled && ' Before/after comparison is temporarily unavailable.'}
           </p>
         )}
         {ready && state.error && (
           <p className="playback-error" role="alert">
             {state.error}
+          </p>
+        )}
+        {fullscreenError && (
+          <p className="playback-error" role="alert">
+            {fullscreenError}
           </p>
         )}
         <PlaybackControls

@@ -1,3 +1,6 @@
+import type { LutState } from '../luts/types';
+import type { ColorMixerState } from './colorMixer';
+
 export interface Adjustments {
   brightness: number;
   contrast: number;
@@ -15,6 +18,8 @@ export type AdjustmentKey = keyof Adjustments;
 
 export interface EditState {
   adjustments: Adjustments;
+  lut: LutState;
+  colorMixer: ColorMixerState;
 }
 
 export interface EditHistory {

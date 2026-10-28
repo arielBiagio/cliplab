@@ -7,3 +7,8 @@ domain under CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.
 
 Duration: 12 seconds. Format: WebM / VP9, 480 × 270, 2 fps.
 This is an automated-test fixture and is not shipped in the application bundle.
+
+`identity.cube` and `channel-cycle.cube` are original synthetic RGB tables created
+for ClipLab tests and dedicated to the public domain under CC0 1.0 Universal.
+They test neutral output and RGB channel ordering; they are not camera conversion
+LUTs. The tests also generate a synthetic 33-point nonlinear table in memory.

@@ -5,11 +5,13 @@ import { EffectsPanel } from './EffectsPanel';
 import { useEditHistory } from './useEditHistory';
 
 function Harness({ graphicsReady = true }: { graphicsReady?: boolean }) {
-  const { adjustments, dispatch, canUndo, canRedo } = useEditHistory();
+  const { adjustments, lut, colorMixer, dispatch, canUndo, canRedo } = useEditHistory();
   return (
     <>
       <EffectsPanel
         adjustments={adjustments}
+        lut={lut}
+        colorMixer={colorMixer}
         disabled={false}
         graphicsReady={graphicsReady}
         dispatch={dispatch}
@@ -25,6 +27,24 @@ function Harness({ graphicsReady = true }: { graphicsReady?: boolean }) {
 }
 
 describe('effects interactions', () => {
+  it('collapses light and color independently without creating edits or losing values', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const light = screen.getByText('Light', { exact: true }).closest('details')!;
+    const color = screen.getByText('Color', { exact: true }).closest('details')!;
+    expect(light).toHaveAttribute('open');
+    expect(color).not.toHaveAttribute('open');
+    await user.click(screen.getByText('Color', { exact: true }));
+    expect(color).toHaveAttribute('open');
+    await user.click(screen.getByText('Light', { exact: true }));
+    expect(light).not.toHaveAttribute('open');
+    expect(screen.getByRole('button', { name: 'Undo test' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Cinematic' }));
+    expect(light).not.toHaveAttribute('open');
+    expect(screen.getByLabelText('Brightness')).toHaveValue('105');
+    expect(light).toHaveTextContent('2 edited');
+    expect(color).toHaveTextContent('1 edited');
+  });
   it.each(['Shadows', 'Highlights'])(
     'commits a %s gesture as one edit and restores it with redo',
     async (name) => {

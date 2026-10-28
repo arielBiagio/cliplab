@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { Adjustments } from '../editing/types';
 import { createVideoRenderer, type VideoRenderer } from './videoRenderer';
 import { DEFAULT_COMPARISON, type ComparisonView } from './comparison';
+import { DEFAULT_LUT_STATE, type LutState } from '../luts/types';
+import { DEFAULT_COLOR_MIXER, type ColorMixerState } from '../editing/colorMixer';
 
 interface RendererState {
   mode: 'pending' | 'webgl2' | 'css';
@@ -13,10 +15,14 @@ export function useVideoRenderer(
   adjustments: Readonly<Adjustments>,
   enabled: boolean,
   comparison: Readonly<ComparisonView> = DEFAULT_COMPARISON,
+  lut: LutState = DEFAULT_LUT_STATE,
+  colorMixer: ColorMixerState = DEFAULT_COLOR_MIXER,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const adjustmentsRef = useRef(adjustments);
   const comparisonRef = useRef(comparison);
+  const lutRef = useRef(lut);
+  const mixerRef = useRef(colorMixer);
   const drawRef = useRef<(() => void) | null>(null);
   const [state, setState] = useState<RendererState>({ mode: 'pending', warning: null });
 
@@ -46,7 +52,16 @@ export function useVideoRenderer(
     function draw() {
       if (!active || !renderer) return;
       try {
-        if (renderer.render(video!, adjustmentsRef.current, comparisonRef.current) && !hasDrawn) {
+        if (
+          renderer.render(
+            video!,
+            adjustmentsRef.current,
+            comparisonRef.current,
+            lutRef.current,
+            mixerRef.current,
+          ) &&
+          !hasDrawn
+        ) {
           hasDrawn = true;
           setState({ mode: 'webgl2', warning: null });
         }
@@ -121,8 +136,10 @@ export function useVideoRenderer(
   useEffect(() => {
     adjustmentsRef.current = adjustments;
     comparisonRef.current = comparison;
+    lutRef.current = lut;
+    mixerRef.current = colorMixer;
     drawRef.current?.();
-  }, [adjustments, comparison]);
+  }, [adjustments, comparison, lut, colorMixer]);
 
   return { canvasRef, ...state };
 }

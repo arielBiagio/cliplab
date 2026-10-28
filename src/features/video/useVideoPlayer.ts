@@ -8,7 +8,12 @@ interface ScrubSession {
   ending: boolean;
 }
 
-export function useVideoPlayer(file: File | null, onReady: (ready: boolean) => void) {
+export function useVideoPlayer(
+  file: File | null,
+  onReady: (ready: boolean) => void,
+  initialTime = 0,
+  onPositionChange?: (time: number, immediately: boolean) => void,
+) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const scrubRef = useRef<ScrubSession | null>(null);
   const scrubFrameRef = useRef<number | null>(null);
@@ -87,7 +92,8 @@ export function useVideoPlayer(file: File | null, onReady: (ready: boolean) => v
     const source: VideoSource = { file, objectUrl: URL.createObjectURL(file) };
     let active = true;
     let notifiedReady = false;
-    const sync = () => {
+    let positionRestored = false;
+    const sync = (event?: Event) => {
       if (!active) return;
       setState((previous) => ({
         ...previous,
@@ -95,6 +101,8 @@ export function useVideoPlayer(file: File | null, onReady: (ready: boolean) => v
         isPlaying: !video.paused && !video.ended,
         isMuted: video.muted,
       }));
+      if (positionRestored)
+        onPositionChange?.(video.currentTime, event?.type === 'pause' || event?.type === 'ended');
     };
     const seeked = () => {
       sync();
@@ -114,10 +122,19 @@ export function useVideoPlayer(file: File | null, onReady: (ready: boolean) => v
     const metadata = () => {
       if (!active) return;
       if (Number.isFinite(video.duration) && video.duration > 0) {
+        if (!positionRestored) {
+          positionRestored = true;
+          video.pause();
+          const time = Number.isFinite(initialTime)
+            ? Math.min(video.duration, Math.max(0, initialTime))
+            : 0;
+          if (time > 0) video.currentTime = time;
+        }
         setState((previous) => ({
           ...previous,
           status: 'ready',
           duration: video.duration,
+          currentTime: video.currentTime,
           error: null,
         }));
         if (!notifiedReady) {
@@ -161,7 +178,7 @@ export function useVideoPlayer(file: File | null, onReady: (ready: boolean) => v
       video.load();
       URL.revokeObjectURL(source.objectUrl);
     };
-  }, [file, onReady, clearScrub, flushScrub]);
+  }, [file, onReady, clearScrub, flushScrub, initialTime, onPositionChange]);
 
   const seekTo = useCallback(
     (seconds: number) => {

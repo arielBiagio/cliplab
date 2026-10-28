@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { EffectsPanel } from '../features/editing/EffectsPanel';
 import { useEditHistory } from '../features/editing/useEditHistory';
 import { ShortcutSettings } from '../features/shortcuts/ShortcutSettings';
@@ -11,15 +11,54 @@ import type { ShortcutPreferences } from '../features/shortcuts/types';
 import { VideoLoader } from '../features/video/VideoLoader';
 import { VideoPlayer } from '../features/video/VideoPlayer';
 import { Icon } from '../shared/Icon';
+import type { CubeLut } from '../features/luts/types';
+import { useSessionPersistence } from '../features/session/useSessionPersistence';
+import { SessionStatus } from '../features/session/SessionStatus';
+import type { SessionSnapshot } from '../features/session/sessionStorage';
 
 export function EditorWorkspace() {
-  const [session, setSession] = useState<{ file: File | null; id: number }>({ file: null, id: 0 });
+  const [session, setSession] = useState<{
+    file: File | null;
+    id: number;
+    initialTime: number;
+    initialLibrary: CubeLut[];
+  }>({ file: null, id: 0, initialTime: 0, initialLibrary: [] });
+  const [library, setLibrary] = useState<CubeLut[]>([]);
   const [ready, setReady] = useState(false);
   const [graphicsReady, setGraphicsReady] = useState(false);
   const [{ preferences, warning }, setPreferences] = useState(readPreferences);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const workspaceRef = useRef<HTMLElement>(null);
-  const { adjustments, canUndo, canRedo, dispatch } = useEditHistory();
+  const { adjustments, lut, colorMixer, committedEdit, canUndo, canRedo, dispatch } =
+    useEditHistory();
+
+  const restoreSession = useCallback(
+    (saved: SessionSnapshot) => {
+      dispatch({ type: 'restore', edit: saved.edit });
+      setLibrary(saved.library);
+      setSession((previous) => ({
+        file: saved.file,
+        id: previous.id + 1,
+        initialTime: saved.currentTime,
+        initialLibrary: saved.library,
+      }));
+    },
+    [dispatch],
+  );
+  const {
+    phase: savePhase,
+    error: saveError,
+    hasSaved,
+    beginSession,
+    updateSnapshot,
+    updatePosition,
+    clearSaved,
+    saveNow,
+  } = useSessionPersistence(restoreSession);
+
+  useEffect(() => {
+    if (session.file) updateSnapshot({ file: session.file, edit: committedEdit, library });
+  }, [session.file, committedEdit, library, updateSnapshot]);
 
   const onReady = useCallback((value: boolean) => {
     setReady(value);
@@ -27,12 +66,14 @@ export function EditorWorkspace() {
   }, []);
   const onLoad = useCallback(
     (file: File) => {
+      beginSession();
       setReady(false);
       setGraphicsReady(false);
       dispatch({ type: 'clear' });
-      setSession((previous) => ({ file, id: previous.id + 1 }));
+      setLibrary([]);
+      setSession((previous) => ({ file, id: previous.id + 1, initialTime: 0, initialLibrary: [] }));
     },
-    [dispatch],
+    [dispatch, beginSession],
   );
   const onUndo = useCallback(() => dispatch({ type: 'undo' }), [dispatch]);
   const onRedo = useCallback(() => dispatch({ type: 'redo' }), [dispatch]);
@@ -57,6 +98,13 @@ export function EditorWorkspace() {
           </span>
         </div>
         <div className="header-actions">
+          <SessionStatus
+            phase={savePhase}
+            hasSaved={hasSaved}
+            hasVideo={!!session.file}
+            onClear={clearSaved}
+            onSave={saveNow}
+          />
           <div className="history-buttons" role="group" aria-label="Edit history">
             <button
               className="icon-button"
@@ -92,6 +140,12 @@ export function EditorWorkspace() {
 
       <main ref={workspaceRef} id="workspace" tabIndex={-1} aria-label="Video editing workspace">
         <h1 className="visually-hidden">ClipLab video editor</h1>
+        {saveError && (
+          <p className="storage-warning" role="alert">
+            <Icon name="info" width="16" height="16" />
+            {saveError}
+          </p>
+        )}
         {warning && (
           <p className="storage-warning" role="status">
             <Icon name="info" width="16" height="16" />
@@ -103,6 +157,8 @@ export function EditorWorkspace() {
             key={session.id}
             file={session.file}
             adjustments={adjustments}
+            lut={lut}
+            colorMixer={colorMixer}
             onLoad={onLoad}
             onReady={onReady}
             onGraphicsReady={setGraphicsReady}
@@ -113,12 +169,19 @@ export function EditorWorkspace() {
             canRedo={canRedo}
             onUndo={onUndo}
             onRedo={onRedo}
+            initialTime={session.initialTime}
+            onPositionChange={updatePosition}
           />
           <EffectsPanel
+            key={`effects-${session.id}`}
             adjustments={adjustments}
+            lut={lut}
+            colorMixer={colorMixer}
             disabled={!ready}
             graphicsReady={graphicsReady}
             dispatch={dispatch}
+            initialLibrary={session.initialLibrary}
+            onLibraryChange={setLibrary}
           />
         </div>
       </main>

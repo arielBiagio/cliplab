@@ -7,6 +7,9 @@ const fixture = fileURLToPath(new URL('./fixtures/test-video.webm', import.meta.
 async function loadVideo(page: Page) {
   await page.getByLabel('Choose video file', { exact: true }).setInputFiles(fixture);
   await expect(page.getByRole('button', { name: 'Play video', exact: true })).toBeEnabled();
+  const color = page.locator('details[data-group="color"]');
+  if (!(await color.evaluate((element) => (element as HTMLDetailsElement).open)))
+    await color.locator('summary').click();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -171,6 +174,12 @@ test('reveals the footer with pointer and keyboard without moving the timeline',
   await page.mouse.move(viewport.width / 2, 20);
   await expect(footer).toHaveCSS('opacity', '0');
   await page.getByRole('region', { name: 'Color adjustments and presets', exact: true }).focus();
+  await page.keyboard.press('Tab');
+  await expect(page.locator('details[data-group="light"] summary')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.locator('details[data-group="color"] summary')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.locator('details[data-group="mixer"] summary')).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(
     footer.getByRole('button', { name: 'View keyboard shortcuts', exact: true }),

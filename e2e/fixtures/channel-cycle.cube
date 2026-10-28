@@ -1,0 +1,11 @@
+# Original synthetic test LUT, CC0-1.0. Output RGB = input GBR.
+TITLE "Channel cycle"
+LUT_3D_SIZE 2
+0 0 0
+0 0 1
+1 0 0
+1 0 1
+0 1 0
+0 1 1
+1 1 0
+1 1 1

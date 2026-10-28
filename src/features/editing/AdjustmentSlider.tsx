@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useId, type CSSProperties } from 'react';
 import { Icon, type IconName } from '../../shared/Icon';
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
   max?: number;
   unit?: '%' | '°' | 'EV' | '';
   step?: number;
+  resetValue?: number;
   description?: string;
   minLabel?: string;
   maxLabel?: string;
@@ -26,6 +27,7 @@ export function AdjustmentSlider({
   max = 200,
   unit = '%',
   step = 1,
+  resetValue = 0,
   description,
   minLabel,
   maxLabel,
@@ -34,31 +36,39 @@ export function AdjustmentSlider({
   onCommit,
   onCancel,
 }: Props) {
+  const id = useId();
   return (
     <div className="adjustment">
       <div className="adjustment-label">
-        <label htmlFor={`adjust-${name}`}>
+        <label htmlFor={id}>
           <Icon name={icon} />
           {name}
         </label>
-        <output htmlFor={`adjust-${name}`}>
+        <output htmlFor={id}>
           {step < 1 ? value.toFixed(1) : value}
           <span>{unit}</span>
         </output>
       </div>
       <input
-        id={`adjust-${name}`}
+        id={id}
         type="range"
         min={min}
         max={max}
         step={step}
         value={value}
         disabled={disabled}
+        title={`Double-click to reset to ${resetValue}${unit}`}
         style={{ '--range-progress': `${((value - min) / (max - min)) * 100}%` } as CSSProperties}
         aria-valuetext={`${value}${unit === 'EV' ? ' exposure stops' : unit === '°' ? ' degrees' : unit === '%' ? ' percent' : ''}`}
-        aria-describedby={description ? `description-${name}` : undefined}
+        aria-describedby={description ? `${id}-description` : undefined}
         onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
         onChange={(event) => onPreview(Number(event.target.value))}
+        onDoubleClick={(event) => {
+          if (disabled) return;
+          event.preventDefault();
+          onPreview(resetValue);
+          onCommit();
+        }}
         onPointerUp={onCommit}
         onPointerCancel={onCancel}
         onBlur={onCommit}
@@ -90,7 +100,7 @@ export function AdjustmentSlider({
         <span>{maxLabel ?? max}</span>
       </div>
       {description && (
-        <span id={`description-${name}`} className="visually-hidden">
+        <span id={`${id}-description`} className="visually-hidden">
           {description}
         </span>
       )}

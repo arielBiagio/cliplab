@@ -10,6 +10,9 @@ const fixture = fileURLToPath(new URL('./fixtures/test-video.webm', import.meta.
 async function loadVideo(page: Page) {
   await page.getByLabel('Choose video file', { exact: true }).setInputFiles(fixture);
   await expect(page.getByRole('button', { name: 'Play video', exact: true })).toBeEnabled();
+  const color = page.locator('details[data-group="color"]');
+  if (!(await color.evaluate((element) => (element as HTMLDetailsElement).open)))
+    await color.locator('summary').click();
 }
 
 async function expectWebGL(page: Page) {

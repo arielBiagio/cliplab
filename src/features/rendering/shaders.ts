@@ -27,6 +27,13 @@ uniform vec3 gradingGains;
 uniform float comparisonSplit;
 uniform float shadows;
 uniform float highlights;
+uniform highp sampler3D colorLut;
+uniform float lutAmount;
+uniform float lutSize;
+uniform vec3 lutDomainMin;
+uniform vec3 lutDomainMax;
+uniform vec3 mixerBands[8];
+uniform float mixerEnabled;
 
 in vec2 textureCoordinates;
 out vec4 outputColor;
@@ -45,6 +52,41 @@ vec3 toSrgb(vec3 color) {
     1.055 * pow(color, vec3(1.0 / 2.4)) - 0.055,
     greaterThan(color, vec3(0.0031308))
   );
+}
+
+vec3 mixColorRanges(vec3 color) {
+  float maximum = max(color.r, max(color.g, color.b));
+  float minimum = min(color.r, min(color.g, color.b));
+  float chroma = maximum - minimum;
+  if (chroma < 0.00001) return color;
+  float lightness = (maximum + minimum) * 0.5;
+  float sat = chroma / max(1.0 - abs(2.0 * lightness - 1.0), 0.00001);
+  float tone;
+  if (maximum == color.r) tone = (color.g - color.b) / chroma;
+  else if (maximum == color.g) tone = (color.b - color.r) / chroma + 2.0;
+  else tone = (color.r - color.g) / chroma + 4.0;
+  tone = fract(tone / 6.0 + 1.0);
+
+  // Smoothly interpolate adjacent ranges, including the magenta/red wrap.
+  const float centers[9] = float[9](0.0, 1.0/12.0, 1.0/6.0, 1.0/3.0,
+    0.5, 2.0/3.0, 0.75, 5.0/6.0, 1.0);
+  vec3 adjustment = vec3(0.0);
+  for (int i = 0; i < 8; i++) {
+    if (tone >= centers[i] && tone < centers[i + 1]) {
+      float weight = smoothstep(centers[i], centers[i + 1], tone);
+      adjustment = mix(mixerBands[i], mixerBands[(i + 1) % 8], weight);
+      break;
+    }
+  }
+  // Hue is unstable near gray and black: fade the effect out in those areas.
+  float protection = smoothstep(0.02, 0.12, sat) * smoothstep(0.01, 0.06, chroma);
+  adjustment *= protection;
+  if (all(equal(adjustment, vec3(0.0)))) return color;
+  tone = fract(tone + adjustment.x + 1.0);
+  sat += adjustment.y * (adjustment.y >= 0.0 ? 1.0 - sat : sat);
+  lightness += adjustment.z * (adjustment.z >= 0.0 ? 1.0 - lightness : lightness);
+  vec3 wheel = clamp(abs(mod(tone * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+  return lightness + (wheel - 0.5) * sat * (1.0 - abs(2.0 * lightness - 1.0));
 }
 
 void main() {
@@ -83,6 +125,17 @@ void main() {
     dot(color, vec3(0.213 - 0.213*c + 0.143*s, 0.715 + 0.285*c + 0.140*s, 0.072 - 0.072*c - 0.283*s)),
     dot(color, vec3(0.213 - 0.213*c - 0.787*s, 0.715 - 0.715*c + 0.715*s, 0.072 + 0.928*c + 0.072*s))
   );
+  color = clamp(color, 0.0, 1.0);
+  if (lutAmount > 0.0) {
+    vec3 inputColor = clamp((color - lutDomainMin) / (lutDomainMax - lutDomainMin), 0.0, 1.0);
+    // Cube data stores red fastest; sample grid points at texel centers, not edges.
+    vec3 coordinates = (inputColor * (lutSize - 1.0) + 0.5) / lutSize;
+    // LUT entries may be negative or above one. Preserve them through intensity mixing.
+    color = mix(color, texture(colorLut, coordinates).rgb, lutAmount);
+  }
+  color = clamp(color, 0.0, 1.0);
+  // Work on the displayed SDR colors, after LUT interpolation and intensity.
+  if (mixerEnabled > 0.0) color = mixColorRanges(color);
   outputColor = vec4(clamp(color, 0.0, 1.0), 1.0);
 }
 `;
