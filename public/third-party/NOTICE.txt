@@ -1,0 +1,8 @@
+Mediabunny 1.63.0
+Copyright Vanilagy and contributors.
+Licensed under the Mozilla Public License 2.0 (see mediabunny-LICENSE.txt).
+
+The unmodified source code used in this build is available in the package archive:
+https://registry.npmjs.org/mediabunny/-/mediabunny-1.63.0.tgz
+
+Project: https://mediabunny.dev/

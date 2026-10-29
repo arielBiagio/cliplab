@@ -16,23 +16,42 @@ const identityLut = new Float32Array([
 
 export interface VideoRenderer {
   render: (
-    video: HTMLVideoElement,
+    video: HTMLVideoElement | HTMLCanvasElement | FloatVideoFrame,
     adjustments: Readonly<Adjustments>,
     comparison?: Readonly<ComparisonView>,
     lut?: LutState,
     colorMixer?: ColorMixerState,
   ) => boolean;
   dispose: () => void;
+  readFloatPixels?: (destination: Float32Array<ArrayBuffer>) => void;
 }
 
-export function createVideoRenderer(canvas: HTMLCanvasElement): VideoRenderer {
+export interface FloatVideoFrame {
+  width: number;
+  height: number;
+  pixels: Float32Array<ArrayBuffer>;
+  transfer?: 'srgb' | 'bt709';
+}
+
+export function createVideoRenderer(
+  canvas: HTMLCanvasElement,
+  options: {
+    maxWidth?: number;
+    maxHeight?: number;
+    preserveDrawingBuffer?: boolean;
+    /** Final output noise amplitude in 8-bit code values, from 0 to 1. Preview defaults to off. */
+    ditherStrength?: number;
+    highPrecision?: boolean;
+    outputTransfer?: 'srgb' | 'bt709';
+  } = {},
+): VideoRenderer {
   const context = canvas.getContext('webgl2', {
     alpha: false,
     antialias: false,
     depth: false,
     stencil: false,
     premultipliedAlpha: false,
-    preserveDrawingBuffer: false,
+    preserveDrawingBuffer: options.preserveDrawingBuffer ?? false,
   });
   if (!context) throw new Error('WebGL2 is unavailable.');
   const gl = context;
@@ -42,6 +61,10 @@ export function createVideoRenderer(canvas: HTMLCanvasElement): VideoRenderer {
   let texture: WebGLTexture | null = null;
   let lutTexture: WebGLTexture | null = null;
   let vertices: WebGLVertexArrayObject | null = null;
+  let framebuffer: WebGLFramebuffer | null = null;
+  let outputTexture: WebGLTexture | null = null;
+  let framebufferWidth = 0;
+  let framebufferHeight = 0;
   let disposed = false;
 
   function dispose() {
@@ -58,6 +81,8 @@ export function createVideoRenderer(canvas: HTMLCanvasElement): VideoRenderer {
     if (texture) gl.deleteTexture(texture);
     if (lutTexture) gl.deleteTexture(lutTexture);
     if (vertices) gl.deleteVertexArray(vertices);
+    if (framebuffer) gl.deleteFramebuffer(framebuffer);
+    if (outputTexture) gl.deleteTexture(outputTexture);
     if (program) gl.deleteProgram(program);
   }
 
@@ -71,6 +96,16 @@ export function createVideoRenderer(canvas: HTMLCanvasElement): VideoRenderer {
   }
 
   try {
+    if (options.highPrecision) {
+      if (!gl.getExtension('EXT_color_buffer_float'))
+        throw new Error(
+          '10-bit export needs floating-point graphics support. Use 8-bit export on this device.',
+        );
+      framebuffer = gl.createFramebuffer();
+      outputTexture = gl.createTexture();
+      if (!framebuffer || !outputTexture)
+        throw new Error('Unable to allocate the high-precision output.');
+    }
     const vertex = compile(gl.VERTEX_SHADER, vertexShader);
     const fragment = compile(gl.FRAGMENT_SHADER, fragmentShader);
     program = gl.createProgram();
@@ -108,6 +143,15 @@ export function createVideoRenderer(canvas: HTMLCanvasElement): VideoRenderer {
     gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
     gl.uniform1i(gl.getUniformLocation(program, 'colorLut'), 1);
+    const ditherStrength = options.ditherStrength ?? 0;
+    gl.uniform1f(
+      gl.getUniformLocation(program, 'ditherStrength'),
+      Number.isFinite(ditherStrength) ? Math.max(0, Math.min(1, ditherStrength)) : 0,
+    );
+    gl.uniform1f(
+      gl.getUniformLocation(program, 'outputBt709'),
+      options.outputTransfer === 'bt709' ? 1 : 0,
+    );
 
     const locations = {
       brightness: gl.getUniformLocation(program, 'brightness'),
@@ -125,6 +169,7 @@ export function createVideoRenderer(canvas: HTMLCanvasElement): VideoRenderer {
       lutDomainMax: gl.getUniformLocation(program, 'lutDomainMax'),
       mixerBands: gl.getUniformLocation(program, 'mixerBands[0]'),
       mixerEnabled: gl.getUniformLocation(program, 'mixerEnabled'),
+      inputBt709: gl.getUniformLocation(program, 'inputBt709'),
     };
     const maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
     const maxLutSize = gl.getParameter(gl.MAX_3D_TEXTURE_SIZE) as number;
@@ -134,6 +179,18 @@ export function createVideoRenderer(canvas: HTMLCanvasElement): VideoRenderer {
     let textureHeight = 0;
 
     return {
+      readFloatPixels: options.highPrecision
+        ? (destination) => {
+            if (disposed || gl.isContextLost())
+              throw new Error('The export graphics context was lost.');
+            if (destination.length !== canvas.width * canvas.height * 4)
+              throw new Error('Invalid high-precision readback size.');
+            gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+            gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.FLOAT, destination);
+            if (gl.getError() !== gl.NO_ERROR)
+              throw new Error('Unable to read high-precision video pixels.');
+          }
+        : undefined,
       render(
         video,
         adjustments,
@@ -142,28 +199,101 @@ export function createVideoRenderer(canvas: HTMLCanvasElement): VideoRenderer {
         colorMixer = DEFAULT_COLOR_MIXER,
       ) {
         if (disposed || gl.isContextLost()) return false;
-        const width = video.videoWidth;
-        const height = video.videoHeight;
-        if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !width || !height)
+        const isFloat = 'pixels' in video;
+        if (isFloat && !options.highPrecision)
+          throw new Error('Float frames require high-precision rendering.');
+        const isVideo = video instanceof HTMLVideoElement;
+        const width = isVideo ? video.videoWidth : video.width;
+        const height = isVideo ? video.videoHeight : video.height;
+        if (!width || !height || (isVideo && video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA))
           return false;
         if (width > maxTextureSize || height > maxTextureSize)
           throw new Error('Video exceeds the graphics texture limit.');
 
-        // Limit the drawing buffer to 1080p. This does not change source decoding.
-        const scale = Math.min(1, 1920 / width, 1080 / height);
+        // The preview keeps its existing 1080p cap; export supplies its own bounds.
+        const scale = Math.min(
+          1,
+          (options.maxWidth ?? 1920) / width,
+          (options.maxHeight ?? 1080) / height,
+        );
         const outputWidth = Math.max(1, Math.round(width * scale));
         const outputHeight = Math.max(1, Math.round(height * scale));
         if (canvas.width !== outputWidth || canvas.height !== outputHeight) {
           canvas.width = outputWidth;
           canvas.height = outputHeight;
         }
+        if (options.highPrecision) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+          if (framebufferWidth !== canvas.width || framebufferHeight !== canvas.height) {
+            // A float attachment avoids the default framebuffer's 8-bit quantization.
+            gl.activeTexture(gl.TEXTURE2);
+            gl.bindTexture(gl.TEXTURE_2D, outputTexture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texImage2D(
+              gl.TEXTURE_2D,
+              0,
+              gl.RGBA32F,
+              canvas.width,
+              canvas.height,
+              0,
+              gl.RGBA,
+              gl.FLOAT,
+              null,
+            );
+            gl.framebufferTexture2D(
+              gl.FRAMEBUFFER,
+              gl.COLOR_ATTACHMENT0,
+              gl.TEXTURE_2D,
+              outputTexture,
+              0,
+            );
+            if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE)
+              throw new Error(
+                'The device cannot render high-precision video frames. Use 8-bit export.',
+              );
+            framebufferWidth = canvas.width;
+            framebufferHeight = canvas.height;
+          }
+        }
         gl.viewport(0, 0, canvas.width, canvas.height);
         gl.useProgram(program);
+        gl.uniform1f(locations.inputBt709, isFloat && video.transfer === 'bt709' ? 1 : 0);
         gl.bindVertexArray(vertices);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-        if (textureWidth !== width || textureHeight !== height) {
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, !isFloat);
+        if (isFloat) {
+          if (video.pixels.length !== width * height * 4)
+            throw new Error('Invalid float video frame.');
+          if (textureWidth !== width || textureHeight !== height) {
+            gl.texImage2D(
+              gl.TEXTURE_2D,
+              0,
+              gl.RGBA16F,
+              width,
+              height,
+              0,
+              gl.RGBA,
+              gl.FLOAT,
+              video.pixels,
+            );
+            textureWidth = width;
+            textureHeight = height;
+          } else {
+            gl.texSubImage2D(
+              gl.TEXTURE_2D,
+              0,
+              0,
+              0,
+              width,
+              height,
+              gl.RGBA,
+              gl.FLOAT,
+              video.pixels,
+            );
+          }
+        } else if (textureWidth !== width || textureHeight !== height) {
           gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
           textureWidth = width;
           textureHeight = height;

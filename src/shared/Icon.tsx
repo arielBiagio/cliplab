@@ -4,6 +4,7 @@ const paths = {
   play: 'm9 5 11 7-11 7V5Z',
   pause: 'M8 5v14M16 5v14',
   upload: 'M12 16V3m-5 5 5-5 5 5M4 16v4h16v-4',
+  download: 'M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4',
   undo: 'm9 4-5 5 5 5M4 9h10a6 6 0 0 1 0 12',
   redo: 'm15 4 5 5-5 5m5-5H10a6 6 0 0 0 0 12',
   keyboard: 'M3 6h18v12H3V6Zm4 4h.01M11 10h.01M15 10h.01M19 10h.01M7 14h.01M10 14h7',

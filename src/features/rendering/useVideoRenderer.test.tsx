@@ -5,13 +5,15 @@ import { DEFAULT_ADJUSTMENTS } from '../editing/presets';
 import { DEFAULT_LUT_STATE } from '../luts/types';
 import { DEFAULT_COLOR_MIXER, type ColorMixerState } from '../editing/colorMixer';
 import type { Adjustments } from '../editing/types';
-import { createVideoRenderer } from './videoRenderer';
+import { createVideoRenderer, type FloatVideoFrame } from './videoRenderer';
 import { useVideoRenderer } from './useVideoRenderer';
 import { DEFAULT_COMPARISON, type ComparisonView } from './comparison';
 
 vi.mock('./videoRenderer', () => ({ createVideoRenderer: vi.fn() }));
 
-const draw = vi.fn((video: HTMLVideoElement) => video.readyState >= 2);
+const draw = vi.fn((video: HTMLVideoElement | HTMLCanvasElement | FloatVideoFrame) =>
+  video instanceof HTMLVideoElement ? video.readyState >= 2 : true,
+);
 const dispose = vi.fn();
 const frameDescriptor = Object.getOwnPropertyDescriptor(
   HTMLVideoElement.prototype,

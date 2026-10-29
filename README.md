@@ -11,6 +11,9 @@ and preview different looks in real time.
 
 - Local video loading through a file picker or drag and drop.
 - Playback, seeking, loop, mute, fullscreen, and an interactive timeline.
+- Local MP4 and WebM export with current edits, optional audio, progress, and cancellation.
+- Selectable export quality and adjustable dithering to reduce visible banding.
+- Optional 10-bit SDR export with floating-point processing and compatible native encoders.
 - WebGL2 preview with exposure, shadows, highlights, white balance, and visual effects.
 - Color Mixer with independent hue, saturation, and luminance for eight color ranges.
 - Local 3D `.cube` LUT gallery with selection, intensity, and bypass controls.
@@ -24,6 +27,7 @@ and preview different looks in real time.
 - React and TypeScript
 - Vite and Tailwind CSS
 - WebGL2 and the HTML5 Video API
+- WebCodecs and Mediabunny for video export
 - IndexedDB for session storage and localStorage for shortcut preferences
 
 ## Run locally
@@ -42,5 +46,9 @@ npm run dev
 Videos and LUTs stay on your device. Session recovery uses local browser storage
 and does not synchronize between devices. No backend or account is required.
 
-Designed for desktop Chrome and Edge. Effects apply to the preview; video export,
-trimming, and multitrack editing are not available.
+Designed for desktop Chrome and Edge. Export supports SDR video up to 1080p without
+upscaling; format and audio availability depend on browser codecs. The initial
+download limit is 512 MiB. Trimming and multitrack editing are not available.
+10-bit export supports BT.709 SDR footage and requires floating-point WebGL
+rendering and a compatible HEVC, VP9, or AV1 encoder. Some decoder pixel formats
+also require float16 canvas support. HDR output is not supported.

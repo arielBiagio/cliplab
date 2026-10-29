@@ -16,6 +16,7 @@ void main() {
 
 export const fragmentShader = `#version 300 es
 precision highp float;
+precision highp int;
 
 uniform sampler2D videoFrame;
 uniform float brightness;
@@ -34,6 +35,9 @@ uniform vec3 lutDomainMin;
 uniform vec3 lutDomainMax;
 uniform vec3 mixerBands[8];
 uniform float mixerEnabled;
+uniform float ditherStrength;
+uniform float outputBt709;
+uniform float inputBt709;
 
 in vec2 textureCoordinates;
 out vec4 outputColor;
@@ -89,8 +93,30 @@ vec3 mixColorRanges(vec3 color) {
   return lightness + (wheel - 0.5) * sat * (1.0 - abs(2.0 * lightness - 1.0));
 }
 
+uint hashPixel(uint value) {
+  value ^= value >> 16u;
+  value *= 0x7feb352du;
+  value ^= value >> 15u;
+  value *= 0x846ca68bu;
+  return value ^ (value >> 16u);
+}
+
+float outputNoise(uvec2 pixel) {
+  uint seed = pixel.x + pixel.y * 65537u;
+  float first = float(hashPixel(seed) & 0x00ffffffu) / 16777216.0;
+  float second = float(hashPixel(seed ^ 0x9e3779b9u) & 0x00ffffffu) / 16777216.0;
+  // Difference of two uniform samples: zero-mean triangular noise, stable across frames.
+  return first - second;
+}
+
 void main() {
   vec3 color = texture(videoFrame, textureCoordinates).rgb;
+  if (inputBt709 > 0.0) {
+    color = clamp(color, 0.0, 1.0);
+    vec3 linearColor = mix(color / 4.5, pow((color + 0.099) / 1.099, vec3(1.0 / 0.45)),
+      greaterThanEqual(color, vec3(0.081)));
+    color = toSrgb(linearColor);
+  }
   // Both sides sample this exact frame; comparison never changes the edit state.
   if (comparisonSplit >= 0.0 && textureCoordinates.x < comparisonSplit) {
     outputColor = vec4(color, 1.0);
@@ -136,6 +162,15 @@ void main() {
   color = clamp(color, 0.0, 1.0);
   // Work on the displayed SDR colors, after LUT interpolation and intensity.
   if (mixerEnabled > 0.0) color = mixColorRanges(color);
+  if (outputBt709 > 0.0) {
+    vec3 linearColor = toLinear(clamp(color, 0.0, 1.0));
+    color = mix(linearColor * 4.5, 1.099 * pow(linearColor, vec3(0.45)) - 0.099,
+      greaterThanEqual(linearColor, vec3(0.018)));
+  }
+  if (ditherStrength > 0.0) {
+    // Add one shared RGB offset before final 8-bit quantization to avoid colored speckles.
+    color += vec3(outputNoise(uvec2(gl_FragCoord.xy)) * ditherStrength / 255.0);
+  }
   outputColor = vec4(clamp(color, 0.0, 1.0), 1.0);
 }
 `;

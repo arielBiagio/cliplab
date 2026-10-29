@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { Icon } from '../../shared/Icon';
 import { buildFilter } from '../editing/filters';
-import type { Adjustments } from '../editing/types';
+import type { Adjustments, EditState } from '../editing/types';
+import { ExportDialog } from '../export/ExportDialog';
 import type { LutState } from '../luts/types';
 import type { ColorMixerState } from '../editing/colorMixer';
 import { useVideoRenderer } from '../rendering/useVideoRenderer';
@@ -53,6 +54,8 @@ export function VideoPlayer({
   onPositionChange,
 }: Props) {
   const [comparison, setComparison] = useState({ ...DEFAULT_COMPARISON });
+  const [exportEdit, setExportEdit] = useState<EditState | null>(null);
+  const closeExport = useCallback(() => setExportEdit(null), []);
   const playbackRef = useRef<HTMLDivElement>(null);
   const fullscreenButtonRef = useRef<HTMLButtonElement>(null);
   const fullscreenPending = useRef(false);
@@ -120,7 +123,7 @@ export function VideoPlayer({
   useKeyboardShortcuts({
     scopeRef,
     preferences,
-    suspended: shortcutsOpen,
+    suspended: shortcutsOpen || exportEdit !== null,
     ready,
     canUndo,
     canRedo,
@@ -142,6 +145,28 @@ export function VideoPlayer({
             </span>
           </div>
           <div className="preview-actions">
+            <button
+              type="button"
+              className="comparison-toggle export-toggle"
+              aria-label="Export video"
+              title={
+                rendererMode === 'webgl2'
+                  ? 'Export edited video'
+                  : 'Export requires the graphics preview'
+              }
+              disabled={!ready || rendererMode !== 'webgl2'}
+              onClick={() => {
+                videoRef.current?.pause();
+                setExportEdit({
+                  adjustments: { ...adjustments },
+                  lut: { ...lut },
+                  colorMixer: { ...colorMixer },
+                });
+              }}
+            >
+              <Icon name="download" width="16" height="16" />
+              <span>Export</span>
+            </button>
             <button
               type="button"
               className="comparison-toggle"
@@ -307,6 +332,7 @@ export function VideoPlayer({
         onStartScrub={startScrub}
         onEndScrub={endScrub}
       />
+      {file && exportEdit && <ExportDialog file={file} edit={exportEdit} onClose={closeExport} />}
     </div>
   );
 }

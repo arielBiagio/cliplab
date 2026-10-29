@@ -1682,7 +1682,8 @@ kbd {
   font-size: 11px;
   margin-bottom: 15px;
 }
-.shortcuts-dialog {
+.shortcuts-dialog,
+.export-dialog {
   position: fixed;
   inset: 0;
   margin: auto;
@@ -1695,7 +1696,8 @@ kbd {
   color: #e8ecdf;
   box-shadow: 0 30px 100px #0008;
 }
-.shortcuts-dialog::backdrop {
+.shortcuts-dialog::backdrop,
+.export-dialog::backdrop {
   background: #080d08b8;
   backdrop-filter: blur(5px);
 }
@@ -1780,6 +1782,137 @@ kbd {
 }
 .dialog-footer .text-button {
   font-size: 10px;
+}
+.export-dialog .dialog-heading {
+  margin-bottom: 12px;
+}
+.export-dialog h2 {
+  font-size: 23px;
+  font-weight: 500;
+  letter-spacing: -0.5px;
+}
+.export-dialog > p {
+  color: #b0bea3;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.export-source {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #161c13;
+  color: #a9b49d;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.export-source-name {
+  color: #e8ecdf;
+  font-size: 12px;
+}
+.export-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 20px 0 12px;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.export-options > label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  font-size: 11px;
+  color: #c5d1b9;
+}
+.export-options select {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid #526244;
+  border-radius: 5px;
+  padding: 6px 10px;
+  background: #20291a;
+  color: #e8ecdf;
+}
+.export-quality,
+.export-bit-depth,
+.export-dither {
+  grid-column: 1 / -1;
+}
+.export-setting-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.export-setting-label output {
+  font-family: var(--mono);
+  color: var(--accent);
+}
+.export-setting-hint {
+  color: #a1ae94;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.export-options .export-audio {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+}
+.export-audio input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+.export-dialog .export-note {
+  color: #a1ae94;
+  font-size: 10px;
+}
+.export-dialog .inline-error {
+  margin-top: 15px;
+}
+.export-status {
+  min-height: 20px;
+  margin-top: 16px;
+}
+.export-progress {
+  display: block;
+  width: 100%;
+  height: 8px;
+  margin: 6px 0 10px;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  accent-color: var(--accent);
+}
+.export-progress::-webkit-progress-bar {
+  background: #39432f;
+}
+.export-progress::-webkit-progress-value {
+  background: var(--accent);
+}
+.export-result {
+  margin-top: 6px;
+}
+.export-local {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  color: #a1ae94;
+}
+.export-dialog .import-button {
+  text-decoration: none;
+}
+.export-dialog .dialog-footer {
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 20px;
 }
 
 @media (min-width: 1500px) {
