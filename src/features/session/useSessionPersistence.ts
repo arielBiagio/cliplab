@@ -147,6 +147,9 @@ export function useSessionPersistence(onRestore: (snapshot: SessionSnapshot) => 
         revision.current++;
       } else if (!immediately) return;
       if (!enabled.current) return;
+      setView((current) =>
+        current.phase === 'saving' ? current : { ...current, phase: 'saving', error: null },
+      );
       if (immediately) flush();
       else if (timer.current === null) timer.current = setTimeout(flush, 1000);
     },

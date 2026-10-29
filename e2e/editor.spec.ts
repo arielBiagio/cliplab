@@ -132,7 +132,7 @@ test('scrubs the timeline with pause / resume and keyboard access', async ({ pag
   await expect.poll(() => currentTime(page)).toBeGreaterThan(11);
 });
 
-test('configures shortcuts, rejects conflicts, traps focus and persists only preferences', async ({
+test('configures shortcuts, rejects conflicts, traps focus and restores session and preferences', async ({
   page,
 }) => {
   await loadVideo(page);
@@ -164,9 +164,11 @@ test('configures shortcuts, rejects conflicts, traps focus and persists only pre
   await page.locator('#workspace').focus();
   await page.keyboard.press('KeyK');
   await expect(page.getByRole('button', { name: 'Pause video', exact: true })).toBeEnabled();
+  await page.keyboard.press('KeyK');
+  await expect(page.locator('.session-storage')).toHaveAttribute('data-save-state', 'saved');
   await page.reload();
-  await expect(page.getByLabel('Brightness', { exact: true })).toHaveValue('100');
-  await expect(page.getByRole('button', { name: 'Play video', exact: true })).toBeDisabled();
+  await expect(page.getByLabel('Brightness', { exact: true })).toHaveValue('110');
+  await expect(page.getByRole('button', { name: 'Play video', exact: true })).toBeEnabled();
   await trigger.click();
   await expect(page.getByLabel('Play / pause', { exact: true })).toHaveValue('KeyK');
   expect(await page.evaluate(() => Object.keys(localStorage))).toEqual(['cliplab.shortcuts.v1']);

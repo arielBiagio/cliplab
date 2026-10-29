@@ -69,6 +69,7 @@ export function useVideoPlayer(
 
     if (scrub.ending) {
       scrubRef.current = null;
+      onPositionChange?.(video.currentTime, true);
       setState((previous) => ({
         ...previous,
         currentTime: video.currentTime,
@@ -76,7 +77,7 @@ export function useVideoPlayer(
       }));
       if (scrub.wasPlaying && video.currentTime < video.duration) void playSafely();
     }
-  }, [playSafely]);
+  }, [playSafely, onPositionChange]);
 
   const scheduleScrub = useCallback(() => {
     if (scrubFrameRef.current !== null || scrubWaitingRef.current) return;
@@ -102,10 +103,15 @@ export function useVideoPlayer(
         isMuted: video.muted,
       }));
       if (positionRestored)
-        onPositionChange?.(video.currentTime, event?.type === 'pause' || event?.type === 'ended');
+        onPositionChange?.(
+          video.currentTime,
+          event?.type === 'pause' ||
+            event?.type === 'ended' ||
+            (event?.type === 'seeked' && video.paused && !scrubRef.current),
+        );
     };
-    const seeked = () => {
-      sync();
+    const seeked = (event: Event) => {
+      sync(event);
       if (!active || !scrubRef.current) return;
       if (scrubFrameRef.current !== null) cancelAnimationFrame(scrubFrameRef.current);
       scrubWaitingRef.current = true;

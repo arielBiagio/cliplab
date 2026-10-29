@@ -234,7 +234,7 @@ test('preserves LUT with presets and groups intensity history with replacement, 
   await expect(page.getByLabel('Brightness', { exact: true })).toHaveValue('105');
 });
 
-test('rejects unsupported LUTs and preserves the current look without uploading or storing the file', async ({
+test('rejects unsupported LUTs, never uploads files and restores the valid look locally', async ({
   page,
 }) => {
   const uploads: string[] = [];
@@ -265,8 +265,9 @@ test('rejects unsupported LUTs and preserves the current look without uploading 
       Object.keys(localStorage).filter((key) => key !== 'cliplab.shortcuts.v1'),
     ),
   ).toEqual([]);
+  await expect(page.locator('.session-storage')).toHaveAttribute('data-save-state', 'saved');
   await page.reload();
-  await expect(page.getByText('No LUT active.', { exact: true })).toBeAttached();
+  await expect(page.locator('.lut-card.is-selected .lut-name')).toHaveText('Channel cycle');
 });
 
 test('restores the LUT after GPU loss and releases the old texture on video replacement', async ({

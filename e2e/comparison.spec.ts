@@ -168,6 +168,8 @@ test('aligns the divider to the fitted image after resizing and supports keyboar
   const { toggle, split } = await openComparison(page);
   await toggle.focus();
   await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Enter fullscreen', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(split).toBeFocused();
   await split.press('ArrowRight');
   await expect(split).toHaveValue('51');
@@ -251,7 +253,8 @@ test('accepts a dropped replacement over the comparison and resets its view', as
   await expect(page.getByRole('button', { name: 'Undo adjustment' })).toBeDisabled();
   await toggle.click();
   await expect(split).toHaveValue('50');
+  await expect(page.locator('.session-storage')).toHaveAttribute('data-save-state', 'saved');
   await page.reload();
-  await expect(toggle).toBeDisabled();
+  await expect(toggle).toBeEnabled();
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 });

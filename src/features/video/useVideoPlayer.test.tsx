@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useVideoPlayer } from './useVideoPlayer';
 
 const onReady = vi.fn();
+const onPositionChange = vi.fn();
 let paused: WeakMap<HTMLMediaElement, boolean>;
 
 function Harness({ file }: { file: File }) {
@@ -17,7 +18,7 @@ function Harness({ file }: { file: File }) {
     restart,
     startScrub,
     endScrub,
-  } = useVideoPlayer(file, onReady);
+  } = useVideoPlayer(file, onReady, 0, onPositionChange);
   return (
     <>
       <video ref={videoRef} aria-label="Test video" />
@@ -37,6 +38,7 @@ function Harness({ file }: { file: File }) {
 
 beforeEach(() => {
   onReady.mockClear();
+  onPositionChange.mockClear();
   paused = new WeakMap();
   vi.stubGlobal(
     'URL',
@@ -75,6 +77,14 @@ function state() {
 }
 
 describe('video controller', () => {
+  it('requests an immediate session checkpoint after seeking while paused', () => {
+    render(<Harness file={new File(['video'], 'test.webm')} />);
+    const video = makeReady();
+    video.currentTime = 5;
+    fireEvent(video, new Event('seeked'));
+    expect(onPositionChange).toHaveBeenLastCalledWith(5, true);
+  });
+
   it('loads metadata without autoplay, bounds seeking, and restarts without pausing', async () => {
     const file = new File(['video'], 'test.webm');
     render(<Harness file={file} />);
