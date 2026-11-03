@@ -5,7 +5,7 @@ and preview different looks in real time.
 
 [Live demo](https://cliplab-playground.netlify.app)
 
-![ClipLab workspace](docs/images/workspace.png)
+![ClipLab workspace](docs/images/workspace.jpg)
 
 ## Features
 
